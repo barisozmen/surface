@@ -10,6 +10,13 @@ A sophisticated Three.js application that visualizes the 3D scalar field `z = si
 npm install && npm run dev
 ```
 
+## Build
+
+```bash
+npm run build && npm run preview
+```
+Then find the whole necessary code under /dist folder.
+
 ## Features
 
 ### Core Visualization
