@@ -1,8 +1,10 @@
-# MathViz - 3D Scalar Field Visualization
+# Surface - 3D Field Visualization
 
-A sophisticated Three.js application that visualizes the 3D scalar field `z = sin(x) * cos(y)` as an interactive surface mesh with advanced controls, animations, and export capabilities.
+Live at [bozmen.io/surface](https://bozmen.io/surface)
 
-![MathViz Preview](./preview.png)
+A sophisticated Three.js application that visualizes arbitrary 3D fields as an interactive surface mesh with advanced controls, animations, gradients, and export capabilities.
+
+![Preview](./assets/preview.png)
 
 ## Run
 
