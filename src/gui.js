@@ -725,7 +725,7 @@ export class GUIController {
                     const customFormula = customFormulaInput.value;
                     this.params.customFormula = customFormula;
                     try {
-                        this.surface.setFormula(customFormula);
+                        this.applyFormula(customFormula);
                         this.params.formulaPreset = 'Custom';
                         this.updateFormulaButton();
                         this.hideFormulaModal();
@@ -955,6 +955,11 @@ export class GUIController {
             yMax: this.params.yMax
         });
         this.performance.setVertexCount(this.surface.getVertexCount());
+        
+        // Refresh gradient visualization if active
+        if (this.gradient && this.gradient.isActive) {
+            this.gradient.regenerateVectorField();
+        }
     }
 
     /**
@@ -966,6 +971,11 @@ export class GUIController {
             y: this.params.resolutionY
         });
         this.performance.setVertexCount(this.surface.getVertexCount());
+        
+        // Refresh gradient visualization if active
+        if (this.gradient && this.gradient.isActive) {
+            this.gradient.regenerateVectorField();
+        }
     }
 
     /**
@@ -1119,6 +1129,11 @@ export class GUIController {
         try {
             this.surface.setFormula(formula);
             this.surface.generateSurface();
+            
+            // Refresh gradient visualization if active
+            if (this.gradient && this.gradient.isActive) {
+                this.gradient.regenerateVectorField();
+            }
             
             // Show success feedback
             this.showFormulaFeedback('Formula applied successfully!', 'success');

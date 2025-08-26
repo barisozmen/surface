@@ -241,8 +241,8 @@ export class GradientVisualizer {
             
             // Position arrow components
             this.hoverShaft.scale.set(1, arrowLength, 1);
-            this.hoverShaft.position.set(0, 0, arrowLength / 2);
-            this.hoverArrow.position.set(0, 0, arrowLength);
+            this.hoverShaft.position.set(0, arrowLength / 2, 0);
+            this.hoverArrow.position.set(0, arrowLength, 0);
             
             // Rotate to point in gradient direction
             this.hoverGradientGroup.rotation.set(0, 0, -direction);
@@ -260,8 +260,8 @@ export class GradientVisualizer {
             
             // Scale and color based on curvature
             this.hoverShaft.scale.set(1, arrowLength, 1);
-            this.hoverShaft.position.set(0, 0, arrowLength / 2);
-            this.hoverArrow.position.set(0, 0, arrowLength);
+            this.hoverShaft.position.set(0, arrowLength / 2, 0);
+            this.hoverArrow.position.set(0, arrowLength, 0);
             
             // Color: blue for negative curvature, red for positive
             const color = second.mean > 0 ? 
@@ -358,6 +358,16 @@ export class GradientVisualizer {
     }
 
     /**
+     * Regenerate vector field (useful after formula changes)
+     */
+    regenerateVectorField() {
+        if (this.isActive) {
+            this.generateVectorField();
+            console.log('Gradient vector field regenerated for new formula');
+        }
+    }
+
+    /**
      * Create a vector arrow at specified position
      * @param {Object} gradient - Gradient information
      */
@@ -368,40 +378,58 @@ export class GradientVisualizer {
             const magnitude = first.magnitude;
             if (magnitude < 0.01) return; // Skip very small gradients
             
-            const arrowLength = Math.min(magnitude * this.vectorScale * 0.5, 1.0);
+            const arrowLength = Math.min(magnitude * this.vectorScale * 0.8, 1.5);
             const direction = first.direction;
             
             // Create arrow geometry
             const arrowGroup = new THREE.Group();
             
-            // Arrow head
-            const headGeometry = new THREE.ConeGeometry(0.05, 0.15, 6);
+            // Calculate normalized magnitude for color
             const normalizedMag = clamp(magnitude / 5.0, 0, 1);
             const color = new THREE.Color().setHSL(0.7 - normalizedMag * 0.7, 1, 0.5);
-            const headMaterial = new THREE.MeshBasicMaterial({ 
-                color,
-                transparent: true,
-                opacity: 0.7
-            });
-            const head = new THREE.Mesh(headGeometry, headMaterial);
-            head.position.set(0, 0, arrowLength);
             
-            // Arrow shaft
-            const shaftGeometry = new THREE.CylinderGeometry(0.02, 0.02, arrowLength, 6);
+            // Arrow shaft - thicker and longer
+            const shaftLength = arrowLength * 0.85; // Shaft is 85% of total length
+            const shaftGeometry = new THREE.CylinderGeometry(0.02, 0.02, shaftLength, 8);
             const shaftMaterial = new THREE.MeshBasicMaterial({ 
                 color,
                 transparent: true,
-                opacity: 0.7
+                opacity: 0.8
             });
             const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
-            shaft.position.set(0, 0, arrowLength / 2);
+            shaft.position.set(0, shaftLength / 2, 0);
             
-            arrowGroup.add(head);
+            // Arrow head - bigger and positioned exactly at shaft end
+            const headLength = arrowLength * 0.15; // Head is 15% of total length
+            const headGeometry = new THREE.ConeGeometry(0.05, headLength, 8);
+            const headMaterial = new THREE.MeshBasicMaterial({ 
+                color,
+                transparent: true,
+                opacity: 0.8
+            });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(0, shaftLength + headLength / 2, 0);
+            
             arrowGroup.add(shaft);
+            arrowGroup.add(head);
             
-            // Position and orient
+            // Rotate the group to align with +Z axis for lookAt
+            arrowGroup.rotation.x = -Math.PI / 2;
+            
+            // Position and orient the entire arrow
             arrowGroup.position.set(point.x, point.y, point.z);
-            arrowGroup.rotation.set(0, 0, -direction);
+            
+            // Create direction vector and apply rotation
+            const dirVector = new THREE.Vector3(
+                Math.cos(direction),
+                Math.sin(direction),
+                0
+            );
+            arrowGroup.lookAt(
+                point.x + dirVector.x,
+                point.y + dirVector.y,
+                point.z + dirVector.z
+            );
             
             this.vectorArrows.push(arrowGroup);
             this.gradientGroup.add(arrowGroup);
