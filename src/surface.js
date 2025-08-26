@@ -35,8 +35,8 @@ export const defaultSurfaceConfig = {
         grayBelowZero: true // Gray coloring for below-zero parts
     },
     formula: {
-        expression: 'A * sin(x + ω*t) * cos(y - ω*t)',
-        preset: 'sin(x) * cos(y)'
+        expression: 'A * exp(x/5) * cos(y + ω*t)',
+        preset: 'exp(x) * cos(y)'
     }
 };
 

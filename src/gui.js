@@ -82,7 +82,7 @@ export class GUIController {
             showMarker: false,
             
             // Formula controls
-            formulaPreset: 'sin(x) * cos(y)',
+            formulaPreset: 'exp(x) * cos(y)',
             customFormula: 'A * sin(x + ω*t) * cos(y - ω*t)',
             
             // Actions
@@ -1218,7 +1218,7 @@ export class GUIController {
             markerX: 0,
             markerY: 0,
             showMarker: false,
-            formulaPreset: 'sin(x) * cos(y)',
+            formulaPreset: 'exp(x) * cos(y)',
             customFormula: 'A * sin(x + ω*t) * cos(y - ω*t)'
         });
         

@@ -499,7 +499,7 @@ export const FORMULA_PRESETS = {
         description: 'Moving source wave pattern',
         labels: ['wave', 'trigonometric', 'radial', 'oscillating']
     },
-    
+
     // Advanced Special Functions
     'Airy Function Approximation': {
         formula: 'A * sin((x*x*x + y*y*y)/10 + ω*t) / (sqrt(x*x + y*y) + 0.1)',
