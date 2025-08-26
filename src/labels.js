@@ -27,10 +27,10 @@ export class LabelsManager {
         this.scene.add(this.labelsGroup);
         
         this.domain = {
-            xMin: -6 * Math.PI,
-            xMax: 6 * Math.PI,
-            yMin: -6 * Math.PI,
-            yMax: 6 * Math.PI
+            xMin: -4 * Math.PI,
+            xMax: 4 * Math.PI,
+            yMin: -4 * Math.PI,
+            yMax: 4 * Math.PI
         };
         
         this.showAxes = true;
@@ -79,12 +79,12 @@ export class LabelsManager {
             new THREE.Vector3(-axisLength, 0, 0),
             new THREE.Vector3(axisLength, 0, 0)
         ]);
-        const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xcc0000, linewidth: 3 });
+        const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xcc0000, linewidth: 6 });
         const xAxis = new THREE.Line(xAxisGeometry, xAxisMaterial);
         this.axesGroup.add(xAxis);
         
         // X-axis arrow
-        const xArrowGeometry = new THREE.ConeGeometry(0.3, 1, 8);
+        const xArrowGeometry = new THREE.ConeGeometry(0.15, 0.5, 8);
         const xArrowMaterial = new THREE.MeshBasicMaterial({ color: 0xcc0000 });
         const xArrow = new THREE.Mesh(xArrowGeometry, xArrowMaterial);
         xArrow.position.set(axisLength, 0, 0);
@@ -96,12 +96,12 @@ export class LabelsManager {
             new THREE.Vector3(0, -axisLength, 0),
             new THREE.Vector3(0, axisLength, 0)
         ]);
-        const yAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00aa00, linewidth: 3 });
+        const yAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00aa00, linewidth: 6 });
         const yAxis = new THREE.Line(yAxisGeometry, yAxisMaterial);
         this.axesGroup.add(yAxis);
         
         // Y-axis arrow
-        const yArrowGeometry = new THREE.ConeGeometry(0.3, 1, 8);
+        const yArrowGeometry = new THREE.ConeGeometry(0.15, 0.5, 8);
         const yArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x00aa00 });
         const yArrow = new THREE.Mesh(yArrowGeometry, yArrowMaterial);
         yArrow.position.set(0, axisLength, 0);
@@ -112,12 +112,12 @@ export class LabelsManager {
             new THREE.Vector3(0, 0, -5),
             new THREE.Vector3(0, 0, 5)
         ]);
-        const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000cc, linewidth: 3 });
+        const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000cc, linewidth: 6 });
         const zAxis = new THREE.Line(zAxisGeometry, zAxisMaterial);
         this.axesGroup.add(zAxis);
         
         // Z-axis arrow
-        const zArrowGeometry = new THREE.ConeGeometry(0.3, 1, 8);
+        const zArrowGeometry = new THREE.ConeGeometry(0.1, 0.4, 8);
         const zArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x0000cc });
         const zArrow = new THREE.Mesh(zArrowGeometry, zArrowMaterial);
         zArrow.position.set(0, 0, 5);
@@ -134,6 +134,8 @@ export class LabelsManager {
         if (!this.showGrid) return;
         
         const { xMin, xMax, yMin, yMax } = this.domain;
+
+        console.log('createGrid x,y min max', xMin, xMax, yMin, yMax);
         
         // Create grid lines with darker colors for white background
         const gridMaterial = new THREE.LineBasicMaterial({

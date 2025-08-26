@@ -13,6 +13,7 @@ export class InteractionManager {
         this.camera = camera;
         this.renderer = renderer;
         this.surface = surfaceGenerator;
+        this.gradient = null;
         
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -119,8 +120,18 @@ export class InteractionManager {
         
         if (intersection) {
             this.showTooltipAt(intersection.point);
+            
+            // Update gradient visualization if gradient tool is active
+            if (this.gradient && this.gradient.isActive) {
+                this.gradient.updateHoverGradient(intersection.point.x, intersection.point.y);
+            }
         } else {
             this.hideTooltip();
+            
+            // Hide gradient visualization
+            if (this.gradient && this.gradient.isActive) {
+                this.gradient.hideHoverGradient();
+            }
         }
     }
 
@@ -271,6 +282,14 @@ export class InteractionManager {
         if (!visible) {
             this.hideTooltip();
         }
+    }
+
+    /**
+     * Set gradient visualizer reference
+     * @param {GradientVisualizer} gradientVisualizer - Gradient visualizer instance
+     */
+    setGradientVisualizer(gradientVisualizer) {
+        this.gradient = gradientVisualizer;
     }
 
     /**

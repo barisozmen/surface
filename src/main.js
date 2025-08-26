@@ -11,6 +11,7 @@ import { LabelsManager } from './labels.js';
 import { PerformanceMonitor } from './performance.js';
 import { InteractionManager } from './interaction.js';
 import { ExportManager } from './export.js';
+import { GradientVisualizer } from './gradient.js';
 
 /**
  * Main application class
@@ -54,6 +55,12 @@ class MathVizApp {
             this.surfaceGenerator
         );
         
+        // Initialize gradient visualizer
+        this.gradientVisualizer = new GradientVisualizer(
+            this.sceneManager.getScene(),
+            this.surfaceGenerator
+        );
+        
         // Initialize GUI controls first
         this.guiController = new GUIController(
             this.surfaceGenerator,
@@ -70,6 +77,10 @@ class MathVizApp {
         // Connect export manager to GUI
         this.guiController.setExportManager(this.exportManager);
         this.guiController.setInteractionManager(this.interactionManager);
+        this.guiController.setGradientVisualizer(this.gradientVisualizer);
+        
+        // Connect gradient visualizer to interaction manager
+        this.interactionManager.setGradientVisualizer(this.gradientVisualizer);
         
         // Setup GUI event handlers
         this.setupGUIEventHandlers();
@@ -158,6 +169,9 @@ class MathVizApp {
         // Update interaction manager
         this.interactionManager.update();
         
+        // Update gradient visualizer
+        this.gradientVisualizer.update();
+        
         // Check for GUI changes
         if (this.guiChangeCheckers) {
             this.guiChangeCheckers.forEach(checker => checker());
@@ -176,6 +190,7 @@ class MathVizApp {
         this.surfaceGenerator.dispose();
         this.labelsManager.dispose();
         this.interactionManager.dispose();
+        this.gradientVisualizer.dispose();
         this.guiController.dispose();
         this.performanceMonitor.dispose();
     }

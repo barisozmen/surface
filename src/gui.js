@@ -3,7 +3,8 @@
  */
 import * as dat from 'dat.gui';
 import { COLOR_MAP_TYPES } from './colormap.js';
-import { getFormulaPresetNames, FORMULA_PRESETS } from './formula.js';
+import { getFormulaPresetNames, FORMULA_PRESETS, FORMULA_LABELS } from './formula.js';
+import { GRADIENT_MODES } from './gradient.js';
 
 /**
  * GUI controller class
@@ -15,12 +16,17 @@ export class GUIController {
         this.performance = performanceMonitor;
         this.interaction = null;
         this.export = null;
+        this.gradient = null;
         
         this.gui = new dat.GUI({ width: 300 });
         this.gui.domElement.style.position = 'absolute';
         this.gui.domElement.style.top = '10px';
         this.gui.domElement.style.left = '10px';
         this.gui.domElement.style.zIndex = '1000';
+        
+        // Formula filtering state
+        this.selectedFilters = new Set();
+        this.filteredFormulas = {};
         
         this.params = this.createParameters();
         this.setupGUI();
@@ -33,10 +39,10 @@ export class GUIController {
     createParameters() {
         return {
             // Domain controls
-            xMin: -6 * Math.PI,
-            xMax: 6 * Math.PI,
-            yMin: -6 * Math.PI,
-            yMax: 6 * Math.PI,
+            xMin: -3 * Math.PI,
+            xMax: 3 * Math.PI,
+            yMin: -3 * Math.PI,
+            yMax: 3 * Math.PI,
             
             // Resolution controls
             resolutionX: 120,
@@ -84,7 +90,14 @@ export class GUIController {
             exportPNG: () => this.exportPNG(),
             exportParams: () => this.exportParameters(),
             importParams: () => this.importParameters(),
-            exportSession: () => this.exportSession()
+            exportSession: () => this.exportSession(),
+            
+            // Gradient tool
+            gradientTool: false,
+            gradientMode: GRADIENT_MODES.FIRST_DERIVATIVE,
+            gradientVectorScale: 1.0,
+            gradientVectorDensity: 0.3,
+            gradientShowVectors: true
         };
     }
 
@@ -133,6 +146,34 @@ export class GUIController {
             .name('Time Warp Mode')
             .onChange(() => this.updateAnimation());
         animationFolder.open();
+
+        // Gradient Tool folder
+        const gradientFolder = this.gui.addFolder('🧮 Gradient Tool');
+        gradientFolder.add(this.params, 'gradientTool')
+            .name('Enable Gradient Tool')
+            .onChange(() => this.toggleGradientTool());
+        
+        const gradientModeOptions = {
+            '1st Derivatives (∇f)': GRADIENT_MODES.FIRST_DERIVATIVE,
+            '2nd Derivatives (Hessian)': GRADIENT_MODES.SECOND_DERIVATIVE,
+            '3rd Derivatives': GRADIENT_MODES.THIRD_DERIVATIVE,
+            'Directional Derivatives': GRADIENT_MODES.DIRECTIONAL,
+            'Laplacian (∇²f)': GRADIENT_MODES.LAPLACIAN
+        };
+        
+        gradientFolder.add(this.params, 'gradientMode', gradientModeOptions)
+            .name('Derivative Type')
+            .onChange(() => this.updateGradientMode());
+        gradientFolder.add(this.params, 'gradientVectorScale', 0.1, 5.0)
+            .name('Vector Scale')
+            .onChange(() => this.updateGradientVectorScale());
+        gradientFolder.add(this.params, 'gradientVectorDensity', 0.1, 1.0)
+            .name('Vector Density')
+            .onChange(() => this.updateGradientVectorDensity());
+        gradientFolder.add(this.params, 'gradientShowVectors')
+            .name('Show Vector Field')
+            .onChange(() => this.updateGradientShowVectors());
+        gradientFolder.open(); // Open the folder by default
 
         // Rendering folder
         const renderingFolder = this.gui.addFolder('Rendering');
@@ -304,15 +345,16 @@ export class GUIController {
         this.formulaModal.style.transform = 'translate(-50%, -50%)';
         this.formulaModal.style.backgroundColor = 'rgba(30, 30, 30, 0.95)';
         this.formulaModal.style.color = 'white';
-        this.formulaModal.style.padding = '30px';
+        this.formulaModal.style.padding = '25px';
         this.formulaModal.style.borderRadius = '15px';
         this.formulaModal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
         this.formulaModal.style.border = '2px solid #666';
         this.formulaModal.style.fontFamily = 'Arial, sans-serif';
-        this.formulaModal.style.maxWidth = '600px';
-        this.formulaModal.style.minWidth = '500px';
-        this.formulaModal.style.maxHeight = '80vh';
-        this.formulaModal.style.overflowY = 'auto';
+        this.formulaModal.style.maxWidth = '900px';
+        this.formulaModal.style.minWidth = '800px';
+        this.formulaModal.style.maxHeight = '85vh';
+        this.formulaModal.style.display = 'flex';
+        this.formulaModal.style.flexDirection = 'column';
         
         this.updateFormulaButton();
         
@@ -369,111 +411,244 @@ export class GUIController {
     }
 
     /**
+     * Filter formulas by selected labels
+     */
+    filterFormulas() {
+        if (this.selectedFilters.size === 0) {
+            this.filteredFormulas = { ...FORMULA_PRESETS };
+        } else {
+            this.filteredFormulas = {};
+            Object.keys(FORMULA_PRESETS).forEach(key => {
+                const preset = FORMULA_PRESETS[key];
+                if (preset.labels && preset.labels.some(label => this.selectedFilters.has(label))) {
+                    this.filteredFormulas[key] = preset;
+                }
+            });
+        }
+    }
+
+    /**
      * Update formula modal content
      */
     updateFormulaModal() {
-        const presets = FORMULA_PRESETS;
-        let modalContent = `
-            <div style="text-align: center; margin-bottom: 25px;">
-                <h2 style="margin: 0 0 10px 0; color: #fff; font-size: 24px;">🧮 Mathematical Functions</h2>
-                <p style="margin: 0; color: #aaa; font-size: 14px;">Choose a preset formula or create your own</p>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+        this.filterFormulas();
+        const filteredPresets = this.filteredFormulas;
+        const presetKeys = Object.keys(filteredPresets);
+
+        // Clear existing content
+        this.formulaModal.innerHTML = '';
+
+        // Create header
+        const header = document.createElement('div');
+        header.style.textAlign = 'center';
+        header.style.marginBottom = '20px';
+        header.innerHTML = `
+            <h2 style="margin: 0 0 10px 0; color: #fff; font-size: 24px;">🧮 Mathematical Functions (${presetKeys.length})</h2>
+            <p style="margin: 0; color: #aaa; font-size: 14px;">Choose a preset formula or create your own</p>
         `;
+        this.formulaModal.appendChild(header);
+
+        // Create filter section
+        const filterSection = document.createElement('div');
+        filterSection.style.marginBottom = '20px';
+        filterSection.style.padding = '15px';
+        filterSection.style.backgroundColor = 'rgba(0,0,0,0.3)';
+        filterSection.style.borderRadius = '10px';
+        filterSection.style.border = '1px solid #555';
+
+        const filterTitle = document.createElement('div');
+        filterTitle.style.fontWeight = 'bold';
+        filterTitle.style.marginBottom = '10px';
+        filterTitle.style.color = '#fff';
+        filterTitle.textContent = '🏷️ Filter by Category:';
+        filterSection.appendChild(filterTitle);
+
+        const filterContainer = document.createElement('div');
+        filterContainer.style.display = 'flex';
+        filterContainer.style.flexWrap = 'wrap';
+        filterContainer.style.gap = '8px';
+
+        // Add "All" button
+        const allButton = document.createElement('button');
+        allButton.textContent = 'All';
+        allButton.style.padding = '6px 12px';
+        allButton.style.border = 'none';
+        allButton.style.borderRadius = '20px';
+        allButton.style.cursor = 'pointer';
+        allButton.style.fontSize = '12px';
+        allButton.style.fontWeight = 'bold';
+        allButton.style.transition = 'all 0.3s ease';
+        allButton.style.backgroundColor = this.selectedFilters.size === 0 ? '#4682b4' : '#555';
+        allButton.style.color = 'white';
         
-        Object.keys(presets).forEach(presetName => {
-            const preset = presets[presetName];
+        allButton.addEventListener('click', () => {
+            this.selectedFilters.clear();
+            this.updateFormulaModal();
+        });
+        filterContainer.appendChild(allButton);
+
+        // Add filter buttons for each label
+        Object.keys(FORMULA_LABELS).forEach(labelKey => {
+            const label = FORMULA_LABELS[labelKey];
+            const isSelected = this.selectedFilters.has(labelKey);
+            
+            const button = document.createElement('button');
+            button.textContent = label.name;
+            button.style.padding = '6px 12px';
+            button.style.border = 'none';
+            button.style.borderRadius = '20px';
+            button.style.cursor = 'pointer';
+            button.style.fontSize = '12px';
+            button.style.fontWeight = 'bold';
+            button.style.transition = 'all 0.3s ease';
+            button.style.backgroundColor = isSelected ? label.color : '#555';
+            button.style.color = 'white';
+            button.style.boxShadow = isSelected ? `0 0 10px ${label.color}40` : 'none';
+            
+            button.addEventListener('click', () => {
+                if (this.selectedFilters.has(labelKey)) {
+                    this.selectedFilters.delete(labelKey);
+                } else {
+                    this.selectedFilters.add(labelKey);
+                }
+                this.updateFormulaModal();
+            });
+            
+            button.addEventListener('mouseenter', () => {
+                if (!isSelected) {
+                    button.style.backgroundColor = label.color;
+                    button.style.opacity = '0.7';
+                }
+            });
+            
+            button.addEventListener('mouseleave', () => {
+                if (!isSelected) {
+                    button.style.backgroundColor = '#555';
+                    button.style.opacity = '1';
+                }
+            });
+            
+            filterContainer.appendChild(button);
+        });
+
+        filterSection.appendChild(filterContainer);
+        this.formulaModal.appendChild(filterSection);
+
+        // Create scrollable content area
+        const contentContainer = document.createElement('div');
+        contentContainer.style.flex = '1';
+        contentContainer.style.overflow = 'hidden';
+        contentContainer.style.display = 'flex';
+        contentContainer.style.flexDirection = 'column';
+
+        // Create grid container
+        const gridContainer = document.createElement('div');
+        gridContainer.style.display = 'grid';
+        gridContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(360px, 1fr))';
+        gridContainer.style.gap = '12px';
+        gridContainer.style.overflowY = 'auto';
+        gridContainer.style.maxHeight = '400px';
+        gridContainer.style.padding = '5px';
+        gridContainer.style.marginBottom = '20px';
+
+        // Create formula cards
+        presetKeys.forEach(presetName => {
+            const preset = filteredPresets[presetName];
             const isSelected = this.params.formulaPreset === presetName;
             
-            modalContent += `
-                <div class="formula-preset-card" data-preset="${presetName}" style="
-                    background: ${isSelected ? 'rgba(70, 130, 180, 0.3)' : 'rgba(50, 50, 50, 0.8)'};
-                    border: 2px solid ${isSelected ? '#4682b4' : '#666'};
-                    border-radius: 10px;
-                    padding: 15px;
-                    cursor: pointer;
-                    transition: all 0.3s ease;
-                    position: relative;
-                ">
-                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #fff;">
-                        ${preset.name}
-                    </div>
-                    <div style="font-family: monospace; font-size: 11px; color: #ddd; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 5px; margin-bottom: 8px;">
-                        ${preset.formula}
-                    </div>
-                    <div style="font-size: 11px; color: #aaa;">
-                        ${preset.description}
-                    </div>
-                    ${isSelected ? '<div style="position: absolute; top: 8px; right: 8px; color: #4682b4; font-size: 16px;">✓</div>' : ''}
-                </div>
-            `;
-        });
-        
-        modalContent += `
-            </div>
-            
-            <div style="border-top: 1px solid #555; padding-top: 20px;">
-                <div style="font-weight: bold; margin-bottom: 10px; color: #fff;">Custom Formula:</div>
-                <textarea id="customFormulaInput" style="
-                    width: 100%;
-                    height: 80px;
-                    background: rgba(0,0,0,0.5);
-                    border: 2px solid #666;
-                    border-radius: 8px;
-                    color: white;
-                    padding: 10px;
-                    font-family: monospace;
-                    font-size: 12px;
-                    resize: vertical;
-                    box-sizing: border-box;
-                " placeholder="Enter custom formula like: A * sin(x) * cos(y)">${this.params.customFormula}</textarea>
-                
-                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
-                    <button id="applyCustomFormula" style="
-                        background: #4682b4;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-weight: bold;
-                        transition: background 0.3s ease;
-                    ">Apply Custom</button>
-                    
-                    <button id="closeFormulaModal" style="
-                        background: #666;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-weight: bold;
-                        transition: background 0.3s ease;
-                    ">Close</button>
-                </div>
-            </div>
-        `;
-        
-        this.formulaModal.innerHTML = modalContent;
-        
-        // Add event listeners to preset cards
-        this.formulaModal.querySelectorAll('.formula-preset-card').forEach(card => {
+            const card = document.createElement('div');
+            card.className = 'formula-preset-card';
+            card.dataset.preset = presetName;
+            card.style.background = isSelected ? 'rgba(70, 130, 180, 0.3)' : 'rgba(50, 50, 50, 0.8)';
+            card.style.border = `2px solid ${isSelected ? '#4682b4' : '#666'}`;
+            card.style.borderRadius = '10px';
+            card.style.padding = '12px';
+            card.style.cursor = 'pointer';
+            card.style.transition = 'all 0.3s ease';
+            card.style.position = 'relative';
+            card.style.minHeight = '120px';
+
+            // Create card content
+            const cardTitle = document.createElement('div');
+            cardTitle.style.fontWeight = 'bold';
+            cardTitle.style.fontSize = '14px';
+            cardTitle.style.marginBottom = '8px';
+            cardTitle.style.color = '#fff';
+            cardTitle.textContent = preset.name;
+
+            const cardFormula = document.createElement('div');
+            cardFormula.style.fontFamily = 'monospace';
+            cardFormula.style.fontSize = '10px';
+            cardFormula.style.color = '#ddd';
+            cardFormula.style.background = 'rgba(0,0,0,0.3)';
+            cardFormula.style.padding = '6px';
+            cardFormula.style.borderRadius = '5px';
+            cardFormula.style.marginBottom = '8px';
+            cardFormula.style.wordBreak = 'break-all';
+            cardFormula.textContent = preset.formula;
+
+            const cardDescription = document.createElement('div');
+            cardDescription.style.fontSize = '11px';
+            cardDescription.style.color = '#aaa';
+            cardDescription.style.marginBottom = '8px';
+            cardDescription.textContent = preset.description;
+
+            // Create labels section
+            const labelsContainer = document.createElement('div');
+            labelsContainer.style.display = 'flex';
+            labelsContainer.style.flexWrap = 'wrap';
+            labelsContainer.style.gap = '4px';
+            labelsContainer.style.marginBottom = '4px';
+
+            if (preset.labels) {
+                preset.labels.forEach(labelKey => {
+                    const label = FORMULA_LABELS[labelKey];
+                    if (label) {
+                        const labelSpan = document.createElement('span');
+                        labelSpan.style.backgroundColor = label.color;
+                        labelSpan.style.color = 'white';
+                        labelSpan.style.fontSize = '9px';
+                        labelSpan.style.padding = '2px 6px';
+                        labelSpan.style.borderRadius = '10px';
+                        labelSpan.style.fontWeight = 'bold';
+                        labelSpan.textContent = label.name;
+                        labelsContainer.appendChild(labelSpan);
+                    }
+                });
+            }
+
+            if (isSelected) {
+                const checkmark = document.createElement('div');
+                checkmark.style.position = 'absolute';
+                checkmark.style.top = '8px';
+                checkmark.style.right = '8px';
+                checkmark.style.color = '#4682b4';
+                checkmark.style.fontSize = '16px';
+                checkmark.textContent = '✓';
+                card.appendChild(checkmark);
+            }
+
+            card.appendChild(cardTitle);
+            card.appendChild(cardFormula);
+            card.appendChild(cardDescription);
+            card.appendChild(labelsContainer);
+
+            // Add event listeners
             card.addEventListener('click', () => {
-                const presetName = card.dataset.preset;
                 this.params.formulaPreset = presetName;
                 this.updateFormulaPreset();
                 this.updateFormulaButton();
                 this.updateFormulaModal();
             });
-            
+
             card.addEventListener('mouseenter', () => {
-                if (!card.dataset.preset === this.params.formulaPreset) {
+                if (card.dataset.preset !== this.params.formulaPreset) {
                     card.style.background = 'rgba(70, 70, 70, 0.8)';
                     card.style.borderColor = '#888';
+                    card.style.transform = 'scale(1.02)';
                 }
             });
-            
+
             card.addEventListener('mouseleave', () => {
                 if (card.dataset.preset === this.params.formulaPreset) {
                     card.style.background = 'rgba(70, 130, 180, 0.3)';
@@ -482,10 +657,64 @@ export class GUIController {
                     card.style.background = 'rgba(50, 50, 50, 0.8)';
                     card.style.borderColor = '#666';
                 }
+                card.style.transform = 'scale(1)';
             });
+
+            gridContainer.appendChild(card);
         });
-        
-        // Add event listeners for buttons (with safety checks)
+
+        contentContainer.appendChild(gridContainer);
+
+        // Create custom formula section
+        const customSection = document.createElement('div');
+        customSection.style.borderTop = '1px solid #555';
+        customSection.style.paddingTop = '20px';
+
+        customSection.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 10px; color: #fff;">Custom Formula:</div>
+            <textarea id="customFormulaInput" style="
+                width: 100%;
+                height: 70px;
+                background: rgba(0,0,0,0.5);
+                border: 2px solid #666;
+                border-radius: 8px;
+                color: white;
+                padding: 10px;
+                font-family: monospace;
+                font-size: 12px;
+                resize: vertical;
+                box-sizing: border-box;
+            " placeholder="Enter custom formula like: A * sin(x) * cos(y)">${this.params.customFormula}</textarea>
+            
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
+                <button id="applyCustomFormula" style="
+                    background: #4682b4;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: background 0.3s ease;
+                ">Apply Custom</button>
+                
+                <button id="closeFormulaModal" style="
+                    background: #666;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: background 0.3s ease;
+                ">Close</button>
+            </div>
+        `;
+
+        contentContainer.appendChild(customSection);
+        this.formulaModal.appendChild(contentContainer);
+
+        // Add event listeners for buttons
         const applyButton = document.getElementById('applyCustomFormula');
         const closeButton = document.getElementById('closeFormulaModal');
         
@@ -506,7 +735,6 @@ export class GUIController {
                 }
             });
             
-            // Hover effects
             applyButton.addEventListener('mouseenter', (e) => {
                 e.target.style.background = '#5a9bd4';
             });
@@ -520,7 +748,6 @@ export class GUIController {
                 this.hideFormulaModal();
             });
             
-            // Hover effects
             closeButton.addEventListener('mouseenter', (e) => {
                 e.target.style.background = '#888';
             });
@@ -954,10 +1181,10 @@ export class GUIController {
     resetToDefaults() {
         // Reset all parameters to defaults
         Object.assign(this.params, {
-            xMin: -6 * Math.PI,
-            xMax: 6 * Math.PI,
-            yMin: -6 * Math.PI,
-            yMax: 6 * Math.PI,
+            xMin: -3 * Math.PI,
+            xMax: 3 * Math.PI,
+            yMin: -3 * Math.PI,
+            yMax: 3 * Math.PI,
             resolutionX: 120, // Lower default for performance
             resolutionY: 120,
             amplitude: 1.0,
@@ -1076,6 +1303,59 @@ export class GUIController {
      */
     setInteractionManager(interactionManager) {
         this.interaction = interactionManager;
+    }
+
+    /**
+     * Set gradient visualizer reference
+     * @param {GradientVisualizer} gradientVisualizer - Gradient visualizer instance
+     */
+    setGradientVisualizer(gradientVisualizer) {
+        this.gradient = gradientVisualizer;
+    }
+
+    /**
+     * Toggle gradient tool
+     */
+    toggleGradientTool() {
+        if (!this.gradient) return;
+        
+        if (this.params.gradientTool) {
+            this.gradient.activate();
+        } else {
+            this.gradient.deactivate();
+        }
+    }
+
+    /**
+     * Update gradient mode
+     */
+    updateGradientMode() {
+        if (!this.gradient) return;
+        this.gradient.setMode(this.params.gradientMode);
+    }
+
+    /**
+     * Update gradient vector scale
+     */
+    updateGradientVectorScale() {
+        if (!this.gradient) return;
+        this.gradient.setVectorScale(this.params.gradientVectorScale);
+    }
+
+    /**
+     * Update gradient vector density
+     */
+    updateGradientVectorDensity() {
+        if (!this.gradient) return;
+        this.gradient.setVectorDensity(this.params.gradientVectorDensity);
+    }
+
+    /**
+     * Update gradient show vectors
+     */
+    updateGradientShowVectors() {
+        if (!this.gradient) return;
+        this.gradient.setVectorVisible(this.params.gradientShowVectors);
     }
 
     /**
