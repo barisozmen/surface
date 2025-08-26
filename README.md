@@ -17,6 +17,10 @@ npm run build && npm run preview
 ```
 Then find the whole necessary code under /dist folder.
 
+## Other similar
+- https://www.geogebra.org/3d
+- https://www.desmos.com/calculator
+
 ## Features
 
 ### Core Visualization
